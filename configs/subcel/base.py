@@ -76,8 +76,21 @@ class Config(ConfigBase):
     targets_mem = targets_mem.squeeze(1)
 
     # calculate loss
-    loss = F.cross_entropy(input=output, target=targets)
-    loss_mem = F.binary_cross_entropy(input=output_mem, target=targets_mem, weight=unk_mem, reduction="sum")
+
+    # change from cross_entropy to Multi_label function
+    # loss = F.cross_entropy(input=output, target=targets)
+    # torch.nn.BCEWithLogitsLoss(weight=None, size_average=None, reduce=None, reduction='mean', pos_weight=None)
+    # torch.nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')
+    # torch.nn.MultiLabelMarginLoss(size_average=None, reduce=None, reduction='mean')
+    
+    criterion = nn.BCEWithLogitsLoss()
+    loss = criterion(output, targets)
+    
+    #loss_mem = F.binary_cross_entropy(input=output_mem, target=targets_mem, weight=unk_mem, reduction="sum")
+    
+    criterion_mem = nn.BCEWithLogitsLoss(weight=unk_mem,reduce="sum")
+    loss_mem = criterion_mem(output_mem, targets_mem)
+    
     loss_mem = loss_mem / sum(unk_mem)
     combined_loss = loss + 0.5 * loss_mem
     
