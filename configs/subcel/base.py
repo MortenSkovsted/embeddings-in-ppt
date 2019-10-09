@@ -61,11 +61,13 @@ class Config(ConfigBase):
 
   def _calculate_loss_and_accuracy(self, output, output_mem, targets, targets_mem, unk_mem, confusion, confusion_mem):
     #Confusion Matrix
-    preds = np.argmax(output.cpu().detach().numpy(), axis=-1)
+    preds = torch.round(output).type(torch.int).cpu().detach().numpy()
+    print(f'preds {preds.shape}')
+    #np.argmax(output.cpu().detach().numpy(), axis=-1)
     
     mem_preds = torch.round(output_mem).type(torch.int).cpu().detach().numpy()
-    confusion.batch_add(targets, preds)
-    confusion_mem.batch_add(targets_mem[np.where(unk_mem == 1)], mem_preds[np.where(unk_mem == 1)])
+    #confusion.batch_add(targets, preds)
+    #confusion_mem.batch_add(targets_mem[np.where(unk_mem == 1)], mem_preds[np.where(unk_mem == 1)])
     
     unk_mem = Variable(torch.from_numpy(unk_mem)).type(torch.float).to(self.args.device)
     targets = Variable(torch.from_numpy(targets)).type(torch.long).to(self.args.device)
@@ -76,14 +78,19 @@ class Config(ConfigBase):
     targets_mem = targets_mem.squeeze(1)
 
     # calculate loss
+<<<<<<< HEAD
 
     # change from cross_entropy to Multi_label function
     # loss = F.cross_entropy(input=output, target=targets)
     # torch.nn.BCEWithLogitsLoss(weight=None, size_average=None, reduce=None, reduction='mean', pos_weight=None)
     # torch.nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')
     # torch.nn.MultiLabelMarginLoss(size_average=None, reduce=None, reduction='mean')
-    
+    print(f'output.size() ={output[10]}')
+    print(f'targets ={targets[0:10]}')
+    print(f'targets.size() ={targets.size()}')
+    print(f'output.size() ={output.size()}')
     criterion = nn.BCEWithLogitsLoss()
+    
     loss = criterion(output, targets)
     
     #loss_mem = F.binary_cross_entropy(input=output_mem, target=targets_mem, weight=unk_mem, reduction="sum")
@@ -91,6 +98,10 @@ class Config(ConfigBase):
     criterion_mem = nn.BCEWithLogitsLoss(weight=unk_mem,reduce="sum")
     loss_mem = criterion_mem(output_mem, targets_mem)
     
+=======
+    loss = F.cross_entropy(input=output, target=targets)
+    loss_mem = F.binary_cross_entropy(input=output_mem, target=targets_mem, weight=unk_mem, reduction="sum")
+>>>>>>> parent of dcb3bf7... Update base.py
     loss_mem = loss_mem / sum(unk_mem)
     combined_loss = loss + 0.5 * loss_mem
     

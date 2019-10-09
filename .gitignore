@@ -114,3 +114,5 @@ data/SecPred/train_raw.npz
 data/SecPred/test_raw.npz
 data/SecPred_raw/test_raw.npz
 data/
+data/Deeploc_raw/test.npz
+data/Deeploc_raw/train.npz
