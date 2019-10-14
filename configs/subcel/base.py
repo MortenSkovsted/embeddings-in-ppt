@@ -61,16 +61,18 @@ class Config(ConfigBase):
 
   def _calculate_loss_and_accuracy(self, output, output_mem, targets, targets_mem, unk_mem, confusion, confusion_mem):
     #Confusion Matrix
-    preds = torch.round(output).type(torch.int).cpu().detach().numpy()
-    print(f'preds {preds.shape}')
+    m = nn.Sigmoid()
+    preds = torch.round(m(output)).type(torch.int).cpu().detach().numpy()
+    #print(f'preds.shape {preds.shape}')
     #np.argmax(output.cpu().detach().numpy(), axis=-1)
-    
+    #print(preds)
     mem_preds = torch.round(output_mem).type(torch.int).cpu().detach().numpy()
     #confusion.batch_add(targets, preds)
-    #confusion_mem.batch_add(targets_mem[np.where(unk_mem == 1)], mem_preds[np.where(unk_mem == 1)])
-    
+    confusion_mem.batch_add(targets_mem[np.where(unk_mem == 1)], mem_preds[np.where(unk_mem == 1)])
+
     unk_mem = Variable(torch.from_numpy(unk_mem)).type(torch.float).to(self.args.device)
-    targets = Variable(torch.from_numpy(targets)).type(torch.long).to(self.args.device)
+    targets = Variable(torch.from_numpy(targets)).type(torch.float).to(self.args.device)
+
     targets_mem = Variable(torch.from_numpy(targets_mem)).type(torch.float).to(self.args.device)
 
     # squeeze from [batch_size,1] -> [batch_size] such that it matches weight matrix for BCE
@@ -78,33 +80,35 @@ class Config(ConfigBase):
     targets_mem = targets_mem.squeeze(1)
 
     # calculate loss
-<<<<<<< HEAD
+
 
     # change from cross_entropy to Multi_label function
     # loss = F.cross_entropy(input=output, target=targets)
     # torch.nn.BCEWithLogitsLoss(weight=None, size_average=None, reduce=None, reduction='mean', pos_weight=None)
     # torch.nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')
     # torch.nn.MultiLabelMarginLoss(size_average=None, reduce=None, reduction='mean')
-    print(f'output.size() ={output[10]}')
-    print(f'targets ={targets[0:10]}')
-    print(f'targets.size() ={targets.size()}')
-    print(f'output.size() ={output.size()}')
+    #print(f'output =\n{output[0:10]}')
+    #print(f'targets =\n{targets[0:10]}')
+    #print(f'targets.size() =\n{targets.size()}')
+    #print(f'output.size() =\n{output.size()}')
+    #print(f'Type(targets) =\n{type(targets)}')
+    #print(f'Type(output) =\n{type(output)}')
     criterion = nn.BCEWithLogitsLoss()
-    
+    #print('I got through criterion = nn.BCEWithLogitsLoss()')
     loss = criterion(output, targets)
-    
+    #print('I got through loss = criterion(output, targets)')
     #loss_mem = F.binary_cross_entropy(input=output_mem, target=targets_mem, weight=unk_mem, reduction="sum")
-    
+
     criterion_mem = nn.BCEWithLogitsLoss(weight=unk_mem,reduce="sum")
     loss_mem = criterion_mem(output_mem, targets_mem)
-    
-=======
-    loss = F.cross_entropy(input=output, target=targets)
-    loss_mem = F.binary_cross_entropy(input=output_mem, target=targets_mem, weight=unk_mem, reduction="sum")
->>>>>>> parent of dcb3bf7... Update base.py
+
+
+    #loss = F.cross_entropy(input=output, target=targets)
+    #loss_mem = F.binary_cross_entropy(input=output_mem, target=targets_mem, weight=unk_mem, reduction="sum")
+
     loss_mem = loss_mem / sum(unk_mem)
     combined_loss = loss + 0.5 * loss_mem
-    
+
     return combined_loss
 
   def run_train(self, model, X, y, mask, mem, unk):
@@ -116,7 +120,7 @@ class Config(ConfigBase):
     confusion_train = ConfusionMatrix(num_classes=10)
     confusion_mem_train = ConfusionMatrix(num_classes=2)
 
-    # Generate minibatches and train on each one of them	
+    # Generate minibatches and train on each one of them
     for batch in iterate_minibatches(X, y, mask, mem, unk, self.args.batch_size):
       inputs, seq_lengths, in_masks, targets, targets_mem, unk_mem = self._prepare_tensors(batch)
       optimizer.zero_grad()
@@ -127,7 +131,7 @@ class Config(ConfigBase):
       optimizer.step()
 
       train_err += loss.item()
-      train_batches += 1 
+      train_batches += 1
 
     train_loss = train_err / train_batches
     return train_loss, confusion_train, confusion_mem_train
@@ -141,7 +145,7 @@ class Config(ConfigBase):
     confusion_mem_valid = ConfusionMatrix(num_classes=2)
 
     with torch.no_grad():
-      # Generate minibatches and train on each one of them	
+      # Generate minibatches and train on each one of them
       for batch in iterate_minibatches(X, y, mask, mem, unk, self.args.batch_size, sort_len=False, shuffle=False, sample_last_batch=False):
         inputs, seq_lengths, in_masks, targets, targets_mem, unk_mem = self._prepare_tensors(batch)
 
@@ -161,7 +165,7 @@ class Config(ConfigBase):
     confusion_mem_valid = ConfusionMatrix(num_classes=2)
 
     with torch.no_grad():
-      # Generate minibatches and train on each one of them	
+      # Generate minibatches and train on each one of them
       # 71 is a hack to hit the an batch size that goes up in 2769 which is the amount of test data in raw dataset
       for batch in iterate_minibatches(X, y, mask, mem, unk, 71, sort_len=False, shuffle=False, sample_last_batch=False):
         inputs, seq_lengths, in_masks, targets, targets_mem, unk_mem = self._prepare_tensors(batch)
@@ -220,15 +224,15 @@ class Config(ConfigBase):
 
       print("Validation shape: {}".format(X_val.shape))
       print("Training shape: {}".format(X_tr.shape))
-      
+
       for epoch in range(self.args.epochs):
         start_time = time.time()
 
         train_loss, confusion_train, confusion_mem_train = self.run_train(model, X_tr, y_tr, mask_tr, mem_tr, unk_tr)
         val_loss, confusion_valid, confusion_mem_valid, (alphas, targets, seq_lengths) = self.run_eval(model, X_val, y_val, mask_val, mem_val, unk_val)
-        
-        self.results.append_epoch(train_loss, val_loss, confusion_train.accuracy(), confusion_valid.accuracy()) 
-        
+
+        self.results.append_epoch(train_loss, val_loss, confusion_train.accuracy(), confusion_valid.accuracy())
+
         if confusion_valid.accuracy() > best_val_acc:
           best_val_epoch = epoch
           best_val_acc = confusion_valid.accuracy()
@@ -239,14 +243,14 @@ class Config(ConfigBase):
 
         if best_val_acc > self.results.best_val_acc:
           self.results.best_val_acc = best_val_acc
-        
+
         print('-' * 24, ' epoch: {:3d} / {:3d} - time: {:5.2f}s '.format(epoch, self.args.epochs-1, time.time() - start_time), '-' * 25 )
-        print('| Train | loss {:.4f} | acc {:.2f}% | mem_acc {:.2f}% | Gorodkin {:2.4f} | MCC {:2.4f}' 
+        print('| Train | loss {:.4f} | acc {:.2f}% | mem_acc {:.2f}% | Gorodkin {:2.4f} | MCC {:2.4f}'
               ' |'.format(train_loss, confusion_train.accuracy()*100, confusion_mem_train.accuracy()*100, gorodkin(confusion_train.ret_mat()), confusion_mem_train.MCC()))
-        print('| Valid | loss {:.4f} | acc {:.2f}% | mem_acc {:.2f}% | Gorodkin {:2.4f} | MCC {:2.4f}' 
+        print('| Valid | loss {:.4f} | acc {:.2f}% | mem_acc {:.2f}% | Gorodkin {:2.4f} | MCC {:2.4f}'
               ' |'.format(val_loss, confusion_valid.accuracy()*100, confusion_mem_valid.accuracy()*100, gorodkin(confusion_valid.ret_mat()), confusion_mem_valid.MCC()))
         print('-' * 84)
-        
+
         sys.stdout.flush()
         torch.cuda.empty_cache()
 
@@ -276,7 +280,7 @@ class Config(ConfigBase):
       best_models.append(model)
 
     test_loss, confusion_test, confusion_mem_test, (alphas, targets, seq_lengths) = self.run_test(best_models, X_test, y_test, mask_test, mem_test, unk_test)
-    
+
     print("ENSAMBLE TEST RESULTS")
     print(confusion_test)
     print(confusion_mem_test)
@@ -286,12 +290,12 @@ class Config(ConfigBase):
     print("test mem MCC:\t\t{:.4f}".format(confusion_mem_test.MCC()))
 
     self.results.set_final(
-      alph = alphas.cpu().detach().numpy(), 
-      seq_len = seq_lengths.cpu().detach().numpy(), 
-      targets = targets, 
+      alph = alphas.cpu().detach().numpy(),
+      seq_len = seq_lengths.cpu().detach().numpy(),
+      targets = targets,
       cf = confusion_test.ret_mat(),
-      cf_mem = confusion_mem_test.ret_mat(), 
-      acc = confusion_test.accuracy(), 
+      cf_mem = confusion_mem_test.ret_mat(),
+      acc = confusion_test.accuracy(),
       acc_mem = confusion_mem_test.accuracy())
-    
+
     save_results(self.results,self.args)
