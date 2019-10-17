@@ -137,9 +137,9 @@ class Config(ConfigBase):
     #criterion = nn.BCEWithLogitsLoss()
     criterion = nn.MultiLabelSoftMarginLoss()
     
-    #print('I got through criterion = nn.BCEWithLogitsLoss()')
+
     loss = criterion(output, targets)
-    #print('I got through loss = criterion(output, targets)')
+
     #loss_mem = F.binary_cross_entropy(input=output_mem, target=targets_mem, weight=unk_mem, reduction="sum")
 
     criterion_mem = nn.BCEWithLogitsLoss(weight=unk_mem,reduce="sum")
