@@ -59,22 +59,45 @@ class Config(ConfigBase):
     seq_lengths = torch.from_numpy(seq_lengths).to(self.args.device)
 
     return inputs, seq_lengths, in_masks, targets, targets_mem, unk_mem
+  def NBprediction(self,np_row):
+    #print(WTF)
+    if np.around(np_row).sum() == 0:
+      prediction = np.array([0,0,0,0,0,0,0,0,0,0])
+      prediction[np.argmax(np_row)] = 1
+    else:
+      prediction = np.around(np_row)
+    return prediction
+
 
   def _calculate_loss_and_accuracy(self, output, output_mem, targets, targets_mem, unk_mem, confusion, confusion_mem):
     #Confusion Matrix
     m = nn.Sigmoid()
 
     #navive basian prediction
-    preds = torch.round(m(output)).type(torch.int).cpu().detach().numpy()
+    ####preds = torch.round(m(output)).type(torch.int).cpu().detach().numpy()
     #print(f'preds.shape {preds.shape}')
     #np.argmax(output.cpu().detach().numpy(), axis=-1)
+    #print('preds')
     #print(preds)
+    
+    # Naive basian aka propabilityes higher than 0.5 is converted to 1
+    # but if no sublocation is predicted (0,0,0,0,0,0,0,0,0), then the highest
+    # properbility will be changed to a 1
+    preds2 = m(output).cpu().detach().numpy()
+    #print('preds2 before')
+    #print(preds2)
+    preds2 = np.apply_along_axis(self.NBprediction,axis=1,arr=preds2)
+    #print('preds2 after')
+    #print(preds2)
+
+
+
 
     #exact match algo from sklearn
-    exact_match = accuracy_score(targets,preds)
+    exact_match = accuracy_score(targets,preds2)
     #print(exact_match)
     #Hamming loss algo from sklearn
-    hamming_los = hamming_loss(targets,preds)
+    hamming_los = hamming_loss(targets,preds2)
     #print(hamming_los)
 
     mem_preds = torch.round(output_mem).type(torch.int).cpu().detach().numpy()
