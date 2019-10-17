@@ -116,18 +116,27 @@ class Config(ConfigBase):
     # calculate loss
 
 
+    
+    #loss = F.cross_entropy(input=output, target=targets) #Old loss function
+
     # change from cross_entropy to Multi_label function
-    # loss = F.cross_entropy(input=output, target=targets)
+    # The following is possible loss functions:
     # torch.nn.BCEWithLogitsLoss(weight=None, size_average=None, reduce=None, reduction='mean', pos_weight=None)
     # torch.nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')
     # torch.nn.MultiLabelMarginLoss(size_average=None, reduce=None, reduction='mean')
+    # torch.nn.MultiLabelSoftMarginLoss(weight=None, size_average=True)
+
     #print(f'output =\n{output[0:10]}')
     #print(f'targets =\n{targets[0:10]}')
     #print(f'targets.size() =\n{targets.size()}')
     #print(f'output.size() =\n{output.size()}')
     #print(f'Type(targets) =\n{type(targets)}')
     #print(f'Type(output) =\n{type(output)}')
-    criterion = nn.BCEWithLogitsLoss()
+
+    #Ready? Choose your loss function!!!
+    #criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.MultiLabelSoftMarginLoss()
+    
     #print('I got through criterion = nn.BCEWithLogitsLoss()')
     loss = criterion(output, targets)
     #print('I got through loss = criterion(output, targets)')
