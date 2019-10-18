@@ -142,7 +142,7 @@ class Config(ConfigBase):
     loss_mem = loss_mem / sum(unk_mem)
     combined_loss = loss + 0.5 * loss_mem
 
-    return combined_loss, exact_match,hamming_los
+    return combined_loss, exact_match, hamming_los, preds, targets
 
   def run_train(self, model, X, y, mask, mem, unk):
     optimizer = torch.optim.Adam(model.parameters(), lr=self.args.learning_rate)
@@ -156,14 +156,22 @@ class Config(ConfigBase):
     total_HL_avg = 0
     confusion_train = ConfusionMatrix(num_classes=10)
     confusion_mem_train = ConfusionMatrix(num_classes=2)
-
+    first = True
+    
     # Generate minibatches and train on each one of them
     for batch in iterate_minibatches(X, y, mask, mem, unk, self.args.batch_size):
       inputs, seq_lengths, in_masks, targets, targets_mem, unk_mem = self._prepare_tensors(batch)
       optimizer.zero_grad()
       (output, output_mem), alphas = model(inputs, seq_lengths)
-      loss , exact_match , HammingLoss = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_train, confusion_mem_train)
+      loss , exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_train, confusion_mem_train)
       loss.backward()
+      if first:
+        total_predicted = torch.IntTensor(preds)
+        total_targets = torch.IntTensor(targets.type('torch.IntTensor'))
+        first = False
+      else:
+        total_predicted = torch.cat((total_predicted, torch.IntTensor(preds)),dim=0)
+        total_targets = torch.cat((total_targets, targets.type('torch.IntTensor')),dim=0)
       torch.nn.utils.clip_grad_norm_(model.parameters(), self.args.clip)
       optimizer.step()
       
@@ -178,9 +186,10 @@ class Config(ConfigBase):
       total_N += count
 
     #print(f'EM {total_EM_avg} and Hamming Loss {total_HL_avg} end')
-    
+    #print(total_predicted)
+    #print(total_targets)
     train_loss = train_err / train_batches
-    return train_loss, confusion_train, confusion_mem_train,total_EM_avg,total_HL_avg
+    return train_loss, confusion_train, confusion_mem_train, total_EM_avg, total_HL_avg, total_predicted, total_targets
 
   def run_eval(self, model, X, y, mask, mem, unk):
     model.eval()
@@ -194,15 +203,24 @@ class Config(ConfigBase):
     confusion_valid = ConfusionMatrix(num_classes=10)
     confusion_mem_valid = ConfusionMatrix(num_classes=2)
 
+    #train_loss, confusion_train, confusion_mem_train, EM_train, Hamming_loss_train, total_predicted, total_targets
+
     with torch.no_grad():
       # Generate minibatches and train on each one of them
+      first = True
       for batch in iterate_minibatches(X, y, mask, mem, unk, self.args.batch_size, sort_len=False, shuffle=False, sample_last_batch=False):
         inputs, seq_lengths, in_masks, targets, targets_mem, unk_mem = self._prepare_tensors(batch)
 
         (output, output_mem), alphas = model(inputs, seq_lengths)
-
-        loss,exact_match,HammingLoss = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid)
         
+        loss, exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid)
+        if first:
+          total_predicted = torch.IntTensor(preds)
+          total_targets = torch.IntTensor(targets.type('torch.IntTensor'))
+          first = False
+        else:
+          total_predicted = torch.cat((total_predicted, torch.IntTensor(preds)),dim=0)
+          total_targets = torch.cat((total_targets, targets.type('torch.IntTensor')),dim=0)
 
         val_err += loss.item()
         val_batches += 1
@@ -214,7 +232,7 @@ class Config(ConfigBase):
         total_N += count
 
     val_loss = val_err / val_batches
-    return val_loss, confusion_valid, confusion_mem_valid, (alphas, targets, seq_lengths,total_EM_avg,total_HL_avg)
+    return val_loss, confusion_valid, confusion_mem_valid, (alphas, total_targets, total_predicted, seq_lengths, total_EM_avg, total_HL_avg)
 
   def run_test(self, models, X, y, mask, mem, unk):
     val_err = 0
@@ -238,13 +256,13 @@ class Config(ConfigBase):
         #divide by number of models
         output = torch.div(output,len(models))
         output_mem = torch.div(output_mem,len(models))
-
-        loss,exact_match,HammingLoss = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid)
+        
+        loss, exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid)
         val_err += loss.item()
         val_batches += 1
 
     val_loss = val_err / val_batches
-    return val_loss, confusion_valid, confusion_mem_valid, (alphas, targets, seq_lengths,exact_match,HammingLoss)
+    return val_loss, confusion_valid, confusion_mem_valid, (alphas, targets, seq_lengths, exact_match, HammingLoss, preds, targets)
 
   def trainer(self):
     (X_train, y_train, mask_train, partition, mem_train, unk_train) = self.traindata
@@ -285,9 +303,13 @@ class Config(ConfigBase):
 
       for epoch in range(self.args.epochs):
         start_time = time.time()
-
-        train_loss, confusion_train, confusion_mem_train,EM_train, Hamming_loss_train = self.run_train(model, X_tr, y_tr, mask_tr, mem_tr, unk_tr)
-        val_loss, confusion_valid, confusion_mem_valid, (alphas, targets, seq_lengths,EM_test,Hamming_loss_test) = self.run_eval(model, X_val, y_val, mask_val, mem_val, unk_val)
+        
+        train_loss, confusion_train, confusion_mem_train, EM_train, Hamming_loss_train, \
+          predicted_train, targets_train = self.run_train(model, X_tr, y_tr, mask_tr, mem_tr, unk_tr)
+        
+        val_loss, confusion_valid, confusion_mem_valid, \
+          (alphas, targets_test, predicted_test, seq_lengths, EM_test, Hamming_loss_test)\
+            = self.run_eval(model, X_val, y_val, mask_val, mem_val, unk_val)
 
         self.results.append_epoch(train_loss, val_loss, EM_train, EM_test)
 
@@ -297,6 +319,8 @@ class Config(ConfigBase):
           best_val_mem_acc = confusion_mem_valid.accuracy()
           best_val_gorodkin = Hamming_loss_test
           best_val_mcc = confusion_mem_valid.MCC()
+          best_prediction = predicted_test
+          related_targets = targets_test
           save_model(model, self.args, index=i)
 
         if best_val_acc > self.results.best_val_acc:
@@ -308,9 +332,15 @@ class Config(ConfigBase):
         print('| Valid | loss {:.4f} | Exact Match {:.2f}% | mem_acc {:.2f}% | Hamming Loss {:2.4f} | MCC {:2.4f}'
               ' |'.format(val_loss, EM_test*100, confusion_mem_valid.accuracy()*100, Hamming_loss_test, confusion_mem_valid.MCC()))
         print('-' * 84)
-
+      
         sys.stdout.flush()
         torch.cuda.empty_cache()
+
+      print(best_prediction)
+      print(best_prediction.size())
+      torch.save(best_prediction,f'./hpc-tensors/Best_prediction_{i}.pt')
+      torch.save(related_targets,f'./hpc-tensors/Targes_{i}.pt')
+
 
       print('|', ' ' * 17, 'Best Exact Match accuracy: {:.2f}% found after {:3d} epochs'.format(best_val_acc*100, best_val_epoch), ' ' * 17, '|')
       print('|', ' '* 17, 'Mem acc {:.2f}% | Hamming Loss {:2.4f} | MCC {:2.4f}'.format(best_val_mem_acc*100, best_val_gorodkin, best_val_mcc) , ' '*16, '|' )
@@ -319,6 +349,7 @@ class Config(ConfigBase):
       best_val_mem_accs.append(best_val_mem_acc)
       best_val_gorodkins.append(best_val_gorodkin)
       best_val_mccs.append(best_val_mcc)
+      # Make a function that outputs the best model for this round or train/test
 
     for i, _ in enumerate(best_val_accs):
       print("Partion {:1d} : Exact Match accuracy {:.2f}% | mem_acc {:.2f}% | Hamming Loss {:2.4f} | MCC {:2.4f}".format(
@@ -337,7 +368,9 @@ class Config(ConfigBase):
       model.eval()
       best_models.append(model)
     
-    test_loss, confusion_test, confusion_mem_test, (alphas, targets, seq_lengths,exact_match,HammingLoss) = self.run_test(best_models, X_test, y_test, mask_test, mem_test, unk_test)
+    val_loss, confusion_test, confusion_mem_test,\
+    (alphas, targets, seq_lengths, exact_match, HammingLoss, preds, targets)\
+     = self.run_test(best_models, X_test, y_test, mask_test, mem_test, unk_test)
 
     print("ENSAMBLE TEST RESULTS")
     print(confusion_test)
