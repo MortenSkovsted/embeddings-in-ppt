@@ -73,31 +73,32 @@ class Config(ConfigBase):
     #Confusion Matrix
     m = nn.Sigmoid()
 
-    #navive basian prediction
-    ####preds = torch.round(m(output)).type(torch.int).cpu().detach().numpy()
-    #print(f'preds.shape {preds.shape}')
+    #Previuse code
     #np.argmax(output.cpu().detach().numpy(), axis=-1)
-    #print('preds')
-    #print(preds)
+
+    #Choose prediction algorim
+    choose = 1
+
+    #navive basian prediction
+    if choose == 0:
+      preds = torch.round(m(output)).type(torch.int).cpu().detach().numpy()
+    
     
     # Naive basian aka propabilityes higher than 0.5 is converted to 1
     # but if no sublocation is predicted (0,0,0,0,0,0,0,0,0), then the highest
     # properbility will be changed to a 1
-    preds2 = m(output).cpu().detach().numpy()
-    #print('preds2 before')
-    #print(preds2)
-    preds2 = np.apply_along_axis(self.NBprediction,axis=1,arr=preds2)
-    #print('preds2 after')
-    #print(preds2)
 
+    elif choose == 1:
+      preds = m(output).cpu().detach().numpy()
+      preds = np.apply_along_axis(self.NBprediction,axis=1,arr=preds)
 
 
 
     #exact match algo from sklearn
-    exact_match = accuracy_score(targets,preds2)
+    exact_match = accuracy_score(targets,preds)
     #print(exact_match)
     #Hamming loss algo from sklearn
-    hamming_los = hamming_loss(targets,preds2)
+    hamming_los = hamming_loss(targets,preds)
     #print(hamming_los)
 
     mem_preds = torch.round(output_mem).type(torch.int).cpu().detach().numpy()
@@ -114,9 +115,6 @@ class Config(ConfigBase):
     targets_mem = targets_mem.squeeze(1)
 
     # calculate loss
-
-
-    
     #loss = F.cross_entropy(input=output, target=targets) #Old loss function
 
     # change from cross_entropy to Multi_label function
@@ -126,18 +124,10 @@ class Config(ConfigBase):
     # torch.nn.MultiLabelMarginLoss(size_average=None, reduce=None, reduction='mean')
     # torch.nn.MultiLabelSoftMarginLoss(weight=None, size_average=True)
 
-    #print(f'output =\n{output[0:10]}')
-    #print(f'targets =\n{targets[0:10]}')
-    #print(f'targets.size() =\n{targets.size()}')
-    #print(f'output.size() =\n{output.size()}')
-    #print(f'Type(targets) =\n{type(targets)}')
-    #print(f'Type(output) =\n{type(output)}')
-
     #Ready? Choose your loss function!!!
     #criterion = nn.BCEWithLogitsLoss()
     criterion = nn.MultiLabelSoftMarginLoss()
     
-
     loss = criterion(output, targets)
 
     #loss_mem = F.binary_cross_entropy(input=output_mem, target=targets_mem, weight=unk_mem, reduction="sum")
