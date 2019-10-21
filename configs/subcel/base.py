@@ -7,6 +7,7 @@ import time
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, hamming_loss
+from sklearn.covariance import EmpiricalCovariance
 from torch.autograd import Variable
 
 
@@ -59,6 +60,7 @@ class Config(ConfigBase):
     seq_lengths = torch.from_numpy(seq_lengths).to(self.args.device)
 
     return inputs, seq_lengths, in_masks, targets, targets_mem, unk_mem
+  
   def NBprediction(self,np_row):
     #print(WTF)
     if np.around(np_row).sum() == 0:
@@ -67,9 +69,12 @@ class Config(ConfigBase):
     else:
       prediction = np.around(np_row)
     return prediction
+  def simple_cov_adjustment(self, np_row,cov_row,position):
+    prediction = np_row + cov_row
+    prediction[position] = 1
+    return prediction
 
-
-  def _calculate_loss_and_accuracy(self, output, output_mem, targets, targets_mem, unk_mem, confusion, confusion_mem):
+  def _calculate_loss_and_accuracy(self, output, output_mem, targets, targets_mem, unk_mem, confusion, confusion_mem, cov):
     #Confusion Matrix
     m = nn.Sigmoid()
 
@@ -78,6 +83,8 @@ class Config(ConfigBase):
 
     #Choose prediction algorim
     choose = 1
+
+    print(cov)
 
     #navive basian prediction
     if choose == 0:
@@ -92,6 +99,14 @@ class Config(ConfigBase):
       preds = m(output).cpu().detach().numpy()
       preds = np.apply_along_axis(self.NBprediction,axis=1,arr=preds)
 
+    # Pick highest likely sublocation, then adjust the rest with variance covariance matrix
+    # If any location is higher than 0.5 pick the highest, adjust with var-cov matrix etc.
+
+    elif choose == 2:
+      # find max value in each row
+      max_pos = np.argmax(output.cpu().detach().numpy(),axis=1)
+      ppp
+      pass
 
 
     #exact match algo from sklearn
@@ -144,7 +159,7 @@ class Config(ConfigBase):
 
     return combined_loss, exact_match, hamming_los, preds, targets
 
-  def run_train(self, model, X, y, mask, mem, unk):
+  def run_train(self, model, X, y, mask, mem, unk, cov):
     optimizer = torch.optim.Adam(model.parameters(), lr=self.args.learning_rate)
     model.train()
 
@@ -163,7 +178,7 @@ class Config(ConfigBase):
       inputs, seq_lengths, in_masks, targets, targets_mem, unk_mem = self._prepare_tensors(batch)
       optimizer.zero_grad()
       (output, output_mem), alphas = model(inputs, seq_lengths)
-      loss , exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_train, confusion_mem_train)
+      loss , exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_train, confusion_mem_train, cov)
       loss.backward()
       if first:
         total_predicted = torch.IntTensor(preds)
@@ -191,7 +206,7 @@ class Config(ConfigBase):
     train_loss = train_err / train_batches
     return train_loss, confusion_train, confusion_mem_train, total_EM_avg, total_HL_avg, total_predicted, total_targets
 
-  def run_eval(self, model, X, y, mask, mem, unk):
+  def run_eval(self, model, X, y, mask, mem, unk, cov):
     model.eval()
 
     val_err = 0
@@ -213,7 +228,7 @@ class Config(ConfigBase):
 
         (output, output_mem), alphas = model(inputs, seq_lengths)
         
-        loss, exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid)
+        loss, exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid, cov)
         if first:
           total_predicted = torch.IntTensor(preds)
           total_targets = torch.IntTensor(targets.type('torch.IntTensor'))
@@ -234,7 +249,7 @@ class Config(ConfigBase):
     val_loss = val_err / val_batches
     return val_loss, confusion_valid, confusion_mem_valid, (alphas, total_targets, total_predicted, seq_lengths, total_EM_avg, total_HL_avg)
 
-  def run_test(self, models, X, y, mask, mem, unk):
+  def run_test(self, models, X, y, mask, mem, unk, cov):
     val_err = 0
     val_batches = 0
     confusion_valid = ConfusionMatrix(num_classes=10)
@@ -257,7 +272,7 @@ class Config(ConfigBase):
         output = torch.div(output,len(models))
         output_mem = torch.div(output_mem,len(models))
         
-        loss, exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid)
+        loss, exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid, cov)
         val_err += loss.item()
         val_batches += 1
 
@@ -301,15 +316,25 @@ class Config(ConfigBase):
       print("Validation shape: {}".format(X_val.shape))
       print("Training shape: {}".format(X_tr.shape))
 
+      #### Make a function that makes a variance covariance matrix of all the training labels
+      #### This is done to be able to use the covariances in the prediction of mutilabeled proteins
+      print(y_tr)
+      print(y_tr.shape)
+      cov = EmpiricalCovariance().fit(y_tr)
+      print(cov)
+      print(cov.covariance_.shape)
+      print(cov.covariance_)
+
+
       for epoch in range(self.args.epochs):
         start_time = time.time()
         
         train_loss, confusion_train, confusion_mem_train, EM_train, Hamming_loss_train, \
-          predicted_train, targets_train = self.run_train(model, X_tr, y_tr, mask_tr, mem_tr, unk_tr)
+          predicted_train, targets_train = self.run_train(model, X_tr, y_tr, mask_tr, mem_tr, unk_tr, cov)
         
         val_loss, confusion_valid, confusion_mem_valid, \
           (alphas, targets_test, predicted_test, seq_lengths, EM_test, Hamming_loss_test)\
-            = self.run_eval(model, X_val, y_val, mask_val, mem_val, unk_val)
+            = self.run_eval(model, X_val, y_val, mask_val, mem_val, unk_val, cov)
 
         self.results.append_epoch(train_loss, val_loss, EM_train, EM_test)
 
