@@ -86,6 +86,8 @@ class Config(ConfigBase):
 
     print(cov)
 
+    model_output = m(output).type(torch.int).cpu().detach().numpy()
+
     #navive basian prediction
     if choose == 0:
       preds = torch.round(m(output)).type(torch.int).cpu().detach().numpy()
@@ -101,11 +103,11 @@ class Config(ConfigBase):
 
     # Pick highest likely sublocation, then adjust the rest with variance covariance matrix
     # If any location is higher than 0.5 pick the highest, adjust with var-cov matrix etc.
-
+    # This is part does not work and may not be needed.
     elif choose == 2:
       # find max value in each row
       max_pos = np.argmax(output.cpu().detach().numpy(),axis=1)
-      ppp
+      preds = np.apply_along_axis(self.simple_cov_adjustment,axis=1,arr=output,)
       pass
 
 
@@ -157,7 +159,7 @@ class Config(ConfigBase):
     loss_mem = loss_mem / sum(unk_mem)
     combined_loss = loss + 0.5 * loss_mem
 
-    return combined_loss, exact_match, hamming_los, preds, targets
+    return combined_loss, exact_match, hamming_los, preds, targets, model_output
 
   def run_train(self, model, X, y, mask, mem, unk, cov):
     optimizer = torch.optim.Adam(model.parameters(), lr=self.args.learning_rate)
@@ -178,15 +180,17 @@ class Config(ConfigBase):
       inputs, seq_lengths, in_masks, targets, targets_mem, unk_mem = self._prepare_tensors(batch)
       optimizer.zero_grad()
       (output, output_mem), alphas = model(inputs, seq_lengths)
-      loss , exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_train, confusion_mem_train, cov)
+      loss , exact_match, HammingLoss, preds, targets, model_output = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_train, confusion_mem_train, cov)
       loss.backward()
       if first:
         total_predicted = torch.IntTensor(preds)
         total_targets = torch.IntTensor(targets.type('torch.IntTensor'))
+        model_pre_output = torch.FloatTensor(model_output)
         first = False
       else:
         total_predicted = torch.cat((total_predicted, torch.IntTensor(preds)),dim=0)
         total_targets = torch.cat((total_targets, targets.type('torch.IntTensor')),dim=0)
+        model_pre_output = torch.cat((model_pre_output, torch.FloatTensor(model_output)),dim=0)
       torch.nn.utils.clip_grad_norm_(model.parameters(), self.args.clip)
       optimizer.step()
       
@@ -204,7 +208,7 @@ class Config(ConfigBase):
     #print(total_predicted)
     #print(total_targets)
     train_loss = train_err / train_batches
-    return train_loss, confusion_train, confusion_mem_train, total_EM_avg, total_HL_avg, total_predicted, total_targets
+    return train_loss, confusion_train, confusion_mem_train, total_EM_avg, total_HL_avg, total_predicted, total_targets, model_pre_output
 
   def run_eval(self, model, X, y, mask, mem, unk, cov):
     model.eval()
@@ -228,7 +232,7 @@ class Config(ConfigBase):
 
         (output, output_mem), alphas = model(inputs, seq_lengths)
         
-        loss, exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid, cov)
+        loss, exact_match, HammingLoss, preds, targets, model_output = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid, cov)
         if first:
           total_predicted = torch.IntTensor(preds)
           total_targets = torch.IntTensor(targets.type('torch.IntTensor'))
@@ -272,7 +276,7 @@ class Config(ConfigBase):
         output = torch.div(output,len(models))
         output_mem = torch.div(output_mem,len(models))
         
-        loss, exact_match, HammingLoss, preds, targets = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid, cov)
+        loss, exact_match, HammingLoss, preds, targets, model_output = self._calculate_loss_and_accuracy(output, output_mem, targets, targets_mem, unk_mem, confusion_valid, confusion_mem_valid, cov)
         val_err += loss.item()
         val_batches += 1
 
@@ -330,7 +334,7 @@ class Config(ConfigBase):
         start_time = time.time()
         
         train_loss, confusion_train, confusion_mem_train, EM_train, Hamming_loss_train, \
-          predicted_train, targets_train = self.run_train(model, X_tr, y_tr, mask_tr, mem_tr, unk_tr, cov)
+          predicted_train, targets_train, model_output = self.run_train(model, X_tr, y_tr, mask_tr, mem_tr, unk_tr, cov)
         
         val_loss, confusion_valid, confusion_mem_valid, \
           (alphas, targets_test, predicted_test, seq_lengths, EM_test, Hamming_loss_test)\
@@ -346,6 +350,7 @@ class Config(ConfigBase):
           best_val_mcc = confusion_mem_valid.MCC()
           best_prediction = predicted_test
           related_targets = targets_test
+          best_postpredictions = model_output
           save_model(model, self.args, index=i)
 
         if best_val_acc > self.results.best_val_acc:
@@ -365,7 +370,7 @@ class Config(ConfigBase):
       print(best_prediction.size())
       torch.save(best_prediction,f'./hpc-tensors/Best_prediction_{i}.pt')
       torch.save(related_targets,f'./hpc-tensors/Targes_{i}.pt')
-
+      torch.save(best_postpredictions,f'./hpc-tensors/Best_postpredictions_{i}.pt')
 
       print('|', ' ' * 17, 'Best Exact Match accuracy: {:.2f}% found after {:3d} epochs'.format(best_val_acc*100, best_val_epoch), ' ' * 17, '|')
       print('|', ' '* 17, 'Mem acc {:.2f}% | Hamming Loss {:2.4f} | MCC {:2.4f}'.format(best_val_mem_acc*100, best_val_gorodkin, best_val_mcc) , ' '*16, '|' )
