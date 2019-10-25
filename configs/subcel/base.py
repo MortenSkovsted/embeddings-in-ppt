@@ -84,9 +84,9 @@ class Config(ConfigBase):
     #Choose prediction algorim
     choose = 1
 
-    print(cov)
+    #print(cov)
 
-    model_output = m(output).type(torch.int).cpu().detach().numpy()
+    model_output = m(output).type(torch.FloatTensor).cpu().detach().numpy()
 
     #navive basian prediction
     if choose == 0:
