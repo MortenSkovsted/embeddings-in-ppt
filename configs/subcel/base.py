@@ -236,11 +236,13 @@ class Config(ConfigBase):
         if first:
           total_predicted = torch.IntTensor(preds)
           total_targets = torch.IntTensor(targets.type('torch.IntTensor'))
+          total_modeloutput = torch.FloatTensor(model_output)
           first = False
         else:
           total_predicted = torch.cat((total_predicted, torch.IntTensor(preds)),dim=0)
           total_targets = torch.cat((total_targets, targets.type('torch.IntTensor')),dim=0)
-
+          total_modeloutput = torch.cat((total_modeloutput, torch.FloatTensor(model_output)),dim=0)
+          
         val_err += loss.item()
         val_batches += 1
         #Algotimen crates total average of Exact match or hammingLoss
@@ -251,7 +253,7 @@ class Config(ConfigBase):
         total_N += count
 
     val_loss = val_err / val_batches
-    return val_loss, confusion_valid, confusion_mem_valid, (alphas, total_targets, total_predicted, seq_lengths, total_EM_avg, total_HL_avg)
+    return val_loss, confusion_valid, confusion_mem_valid, (alphas, total_targets, total_predicted, seq_lengths, total_EM_avg, total_HL_avg, total_modeloutput)
 
   def run_test(self, models, X, y, mask, mem, unk, cov):
     val_err = 0
@@ -322,12 +324,12 @@ class Config(ConfigBase):
 
       #### Make a function that makes a variance covariance matrix of all the training labels
       #### This is done to be able to use the covariances in the prediction of mutilabeled proteins
-      print(y_tr)
-      print(y_tr.shape)
+      #print(y_tr)
+      #print(y_tr.shape)
       cov = EmpiricalCovariance().fit(y_tr)
-      print(cov)
-      print(cov.covariance_.shape)
-      print(cov.covariance_)
+      #print(cov)
+      #print(cov.covariance_.shape)
+      #print(cov.covariance_)
 
 
       for epoch in range(self.args.epochs):
@@ -337,7 +339,7 @@ class Config(ConfigBase):
           predicted_train, targets_train, model_output = self.run_train(model, X_tr, y_tr, mask_tr, mem_tr, unk_tr, cov)
         
         val_loss, confusion_valid, confusion_mem_valid, \
-          (alphas, targets_test, predicted_test, seq_lengths, EM_test, Hamming_loss_test)\
+          (alphas, targets_test, predicted_test, seq_lengths, EM_test, Hamming_loss_test, total_modeloutput)\
             = self.run_eval(model, X_val, y_val, mask_val, mem_val, unk_val, cov)
 
         self.results.append_epoch(train_loss, val_loss, EM_train, EM_test)
@@ -350,7 +352,7 @@ class Config(ConfigBase):
           best_val_mcc = confusion_mem_valid.MCC()
           best_prediction = predicted_test
           related_targets = targets_test
-          best_postpredictions = model_output
+          best_postpredictions = total_modeloutput
           save_model(model, self.args, index=i)
 
         if best_val_acc > self.results.best_val_acc:
@@ -366,8 +368,9 @@ class Config(ConfigBase):
         sys.stdout.flush()
         torch.cuda.empty_cache()
 
-      print(best_prediction)
-      print(best_prediction.size())
+      
+      print(f'best_prediction.size() {best_prediction.size()}')
+      print(f'best_postpredictions.size() {best_postpredictions.size()}')
       torch.save(best_prediction,f'./hpc-tensors/Best_prediction_{i}.pt')
       torch.save(related_targets,f'./hpc-tensors/Targes_{i}.pt')
       torch.save(best_postpredictions,f'./hpc-tensors/Best_postpredictions_{i}.pt')
