@@ -123,7 +123,7 @@ class Config(ConfigBase):
     confusion_mem.batch_add(targets_mem[np.where(unk_mem == 1)], mem_preds[np.where(unk_mem == 1)])
 
     unk_mem = Variable(torch.from_numpy(unk_mem)).type(torch.float).to(self.args.device)
-    targets = Variable(torch.from_numpy(targets)).type(torch.float).to(self.args.device)
+    targets = Variable(torch.from_numpy(targets)).type(torch.torch.double).to(self.args.device)
 
     targets_mem = Variable(torch.from_numpy(targets_mem)).type(torch.float).to(self.args.device)
 
@@ -142,11 +142,18 @@ class Config(ConfigBase):
     # torch.nn.MultiLabelSoftMarginLoss(weight=None, size_average=True)
 
     #Ready? Choose your loss function!!!
-    #criterion = nn.BCEWithLogitsLoss()
-    criterion = nn.MultiLabelSoftMarginLoss()
+    #weights = torch.uint8()
+    total_proteins_labels = 27319
+    tpl = total_proteins_labels
+    weights = torch.DoubleTensor([tpl/7397, tpl/7662, tpl/2615, tpl/1942, tpl/3117, tpl/1469, tpl/821, tpl/965, tpl/1120, tpl/211]).to(self.args.device)
+    criterion = nn.MultiLabelSoftMarginLoss(weights)
+    #criterion = nn.BCEWithLogitsLoss(weights)
     
+    #print(torch.tensor([tpl/7397, tpl/7662, tpl/2615, tpl/1942, tpl/3117, tpl/1469, tpl/821, tpl/965, tpl/1120, tpl/211],dtype=torch.double))
+    #output = output.type(torch.cuda.DoubleTensor)
+    output = output.type(torch.double).to(self.args.device)
     loss = criterion(output, targets)
-
+    loss = loss.type(torch.float)
     #loss_mem = F.binary_cross_entropy(input=output_mem, target=targets_mem, weight=unk_mem, reduction="sum")
 
     criterion_mem = nn.BCEWithLogitsLoss(weight=unk_mem,reduce="sum")
