@@ -67,6 +67,7 @@ class ConfusionMatrix:
 			self.preds.append(preds[i])
 			self.targets.append(targets[i])
 
+
 	def ret_mat(self):
 		return self.mat
  

@@ -120,8 +120,10 @@ class Config(ConfigBase):
 
     mem_preds = torch.round(output_mem).type(torch.int).cpu().detach().numpy()
     #confusion.batch_add(targets, preds)
-    confusion_mem.batch_add(targets_mem[np.where(unk_mem == 1)], mem_preds[np.where(unk_mem == 1)])
-
+    try:
+      confusion_mem.batch_add(targets_mem[np.where(unk_mem == 1)], mem_preds[np.where(unk_mem == 1)])
+    except Exception as e:
+      print("type error: " + str(e))
     unk_mem = Variable(torch.from_numpy(unk_mem)).type(torch.float).to(self.args.device)
     targets = Variable(torch.from_numpy(targets)).type(torch.torch.double).to(self.args.device)
 
@@ -214,9 +216,10 @@ class Config(ConfigBase):
       total_HL_avg = (total_HL_avg * total_N + HammingLoss * count)/(total_N + count)
       #print(f'EM {total_EM_avg} and Hamming Loss {total_HL_avg}')
       total_N += count
-
-    f1scores = f1_score(total_targets, total_predicted,average=None)
-    f1average = f1scores.sum()/len(f1scores)
+    #run on same metric as fairSeq
+    #f1scores = f1_score(total_targets, total_predicted,average=None)
+    #f1average = f1scores.sum()/len(f1scores)
+    f1average = f1_score(total_targets, total_predicted,average='macro')
     #print(f1average)
 
 
@@ -271,8 +274,13 @@ class Config(ConfigBase):
         #print(preds)
         count = targets.shape[0]
 
-        f1scores = f1_score(targets.cpu(), preds,average=None)
-        f1average = f1scores.sum()/len(f1scores)
+
+        # This is not the same F1 as used in fairseq
+        #f1scores = f1_score(targets.cpu(), preds,average=None)
+        #f1average = f1scores.sum()/len(f1scores)
+
+        f1average = f1_score(targets.cpu(), preds,average='macro')
+
         #print(f1average)
         total_F1_avg = (total_F1_avg * total_N + f1average * count)/(total_N + count)
 
