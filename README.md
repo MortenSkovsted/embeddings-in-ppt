@@ -1,8 +1,17 @@
 # Readme
 
+This forked version of [Gustav Madslund](https://github.com/gustavmadslund) and [Mikkel Møller Brusen](https://github.com/mikkelbrusen)'s work empliments prediction of multi-labeled datasets of the subcellular localization (subcel). All installation is done as previuse. The original branche take the subcellular localization encoded as an n x 1 array of integers (1-10), where n is the number of proteins. This fork takes its input as an n x 10 array of intergers (0,1) where 0/1 indicate the presents/absences of a perticular location. E.g. Old format: 2 -> new format: [0,1,0,0,0,0,0,0,0,0].
+Additionally error function was changed to accommodate this new option for multi-labelling, and the output metrics was changed to output F1 and Exact match as these are more meaningful metrics when multi-labels are possible.
+
+
+secpred part of the code have been left untoched and untested.
+forked by [MortenSkovsted](https://github.com/MortenSkovsted)
+
 This is the code repository that accompany the master thesis by [Gustav Madslund](https://github.com/gustavmadslund) and [Mikkel Møller Brusen](https://github.com/mikkelbrusen).
 
 The goal of the project was to evaluate pre-trained amino acid embeddings in protein prediction tasks
+
+
 
 ## Software Requirements
 
@@ -22,6 +31,7 @@ In order to run all configurations the following datasets are needed:
 + **SecPred_raw** which is the CB513 dataset without encoding (raw sequences). X has been replaced by A.
 
 all of which can be [downloaded here](https://drive.google.com/drive/folders/1-qPOetLSYrrlFvcjmt2lSAwKoR-_AXFm?usp=sharing)
+See comment in the top!!!
 
 The datasets should then be positioned in the [`data/` directory](data/) similarly to the already included Deeploc_raw dataset.
 
