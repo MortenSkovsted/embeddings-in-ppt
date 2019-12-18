@@ -6,6 +6,7 @@ Additionally error function was changed to accommodate this new option for multi
 secpred part of the code have been left untoched and untested.
 forked by [MortenSkovsted](https://github.com/MortenSkovsted)
 
+The following is left (almost) unchanged from the original readme:
 This is the code repository that accompany the master thesis by [Gustav Madslund](https://github.com/gustavmadslund) and [Mikkel Møller Brusen](https://github.com/mikkelbrusen).
 
 The goal of the project was to evaluate pre-trained amino acid embeddings in protein prediction tasks
@@ -30,7 +31,7 @@ In order to run all configurations the following datasets are needed:
 + **SecPred_raw** which is the CB513 dataset without encoding (raw sequences). X has been replaced by A.
 
 all of which can be [downloaded here](https://drive.google.com/drive/folders/1-qPOetLSYrrlFvcjmt2lSAwKoR-_AXFm?usp=sharing)
-See comment in the top!!!
+{Edit:See comment in the top!!!:MortenSkovsted}
 
 The datasets should then be positioned in the [`data/` directory](data/) similarly to the already included Deeploc_raw dataset.
 
