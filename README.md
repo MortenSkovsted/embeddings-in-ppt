@@ -1,8 +1,7 @@
 # Readme
 
-This forked version of [Gustav Madslund](https://github.com/gustavmadslund) and [Mikkel Møller Brusen](https://github.com/mikkelbrusen)'s work empliments prediction of multi-labeled datasets of the subcellular localization (subcel). All installation is done as previuse. The original branche take the subcellular localization encoded as an n x 1 array of integers (1-10), where n is the number of proteins. This fork takes its input as an n x 10 array of intergers (0,1) where 0/1 indicate the presents/absences of a perticular location. E.g. Old format: 2 -> new format: [0,1,0,0,0,0,0,0,0,0].
+This forked version of [Gustav Madslund](https://github.com/gustavmadslund) and [Mikkel Møller Brusen](https://github.com/mikkelbrusen)'s work implements prediction of multi-labelled datasets of the subcellular localization (subcel). All installation is done as previous. The original branch take the subcellular localization encoded as an n x 1 array of integers (1-10), where n is the number of proteins. This fork takes its input as an n x 10 array of integers (0,1) where 0/1 indicate the presents/absences of a particular location. E.g. Old format: 2 -> new format: [0,1,0,0,0,0,0,0,0,0].
 Additionally error function was changed to accommodate this new option for multi-labelling, and the output metrics was changed to output F1 and Exact match as these are more meaningful metrics when multi-labels are possible.
-
 
 secpred part of the code have been left untoched and untested.
 forked by [MortenSkovsted](https://github.com/MortenSkovsted)
