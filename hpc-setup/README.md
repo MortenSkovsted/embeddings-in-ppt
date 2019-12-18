@@ -32,7 +32,7 @@ To get info of GPU usage, write `$ nvidia-smi`
 
 Modify [jobscript.sh](./jobscript.sh) to use one of these nodes
 
-To run jobscript, write `$ bsub > jobscript.sh`
+To run jobscript, write `$ bsub < jobscript.sh`
 
 Read more about **bsub** here: [HPC DTU](https://www.hpc.dtu.dk/?page_id=1519)
 
